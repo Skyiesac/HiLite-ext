@@ -17,6 +17,7 @@ class WebHighlighter {
     this.setupMessageListener();
     this.setupContextMenu();
     this.setupStorageListener();
+    this.setupHighlightClickListeners();
     
     // Handle different page load scenarios
     if (document.readyState === 'loading') {
@@ -34,7 +35,7 @@ class WebHighlighter {
     
     // Also listen for when the page becomes fully loaded
     window.addEventListener('load', () => {
-      setTimeout(() => this.restoreHighlights(), 50);
+      setTimeout(() => this.restoreHighlights(), 100);
     });
     
     // Listen for page visibility changes (tab switching, page focus)
@@ -67,15 +68,10 @@ class WebHighlighter {
       const highlights = result[url] || [];
       console.log('Highlights in main storage:', highlights);
       
-      const backupKey = `backup_${url}`;
-      const backupResult = await browser.storage.local.get(backupKey);
-      const backupHighlights = backupResult[backupKey] || [];
-      console.log('Highlights in backup storage:', backupHighlights);
-      
-      console.log('Total highlights found:', highlights.length + backupHighlights.length);
+      console.log('Total highlights found:', highlights.length);
       console.log('=== END DEBUG ===');
       
-      return { main: highlights, backup: backupHighlights };
+      return { main: highlights };
     } catch (error) {
       console.error('Error in debug storage:', error);
       return null;
@@ -101,6 +97,10 @@ class WebHighlighter {
           break;
         case 'deleteHighlight':
           this.deleteHighlight(message.highlightId).then(sendResponse);
+          break;
+        case 'refreshHighlights':
+          this.refreshHighlightsFromStorage();
+          sendResponse({ success: true });
           break;
         case 'debugStorage':
           this.debugStorage().then(sendResponse);
@@ -167,24 +167,20 @@ class WebHighlighter {
   createHighlight(range, color) {
     const highlightId = `highlight-${Date.now()}-${++this.highlightCounter}`;
     
-    // IMPORTANT: Get the text content BEFORE extracting contents
+    // Get the text content
     const textContent = range.toString();
     
-    // Create highlight span
+    // Create a simple highlight span
     const highlightSpan = document.createElement('span');
     highlightSpan.className = this.highlightClass;
     highlightSpan.id = highlightId;
     highlightSpan.style.backgroundColor = color;
-    highlightSpan.style.borderRadius = '2px';
-    highlightSpan.style.padding = '1px 2px';
-    highlightSpan.style.margin = '0 1px';
+    highlightSpan.textContent = textContent;
     
-    // Extract and wrap the selected content
-    const contents = range.extractContents();
-    highlightSpan.appendChild(contents);
+    // Replace the range content with the highlight
+    range.deleteContents();
     range.insertNode(highlightSpan);
     
-    // Return both the ID and the text content
     return { id: highlightId, text: textContent };
   }
 
@@ -199,9 +195,7 @@ class WebHighlighter {
         text: textContent,
         color: color,
         url: url,
-        timestamp: Date.now(),
-        selector: this.generateSelector(document.getElementById(highlightId)),
-        xpath: this.generateXPath(document.getElementById(highlightId))
+        timestamp: Date.now()
       };
 
       console.log('Saving highlight:', highlightData);
@@ -211,93 +205,13 @@ class WebHighlighter {
       const highlights = result[url] || [];
       highlights.push(highlightData);
       
-      // Save back to storage and wait for completion
+      // Save back to storage
       await browser.storage.local.set({ [url]: highlights });
-      
-      // Verify the save was successful
-      const verifyResult = await browser.storage.local.get(url);
-      if (verifyResult[url] && verifyResult[url].length === highlights.length) {
-        console.log('Highlight saved successfully and verified');
-      } else {
-        console.error('Highlight save verification failed');
-      }
-      
-      // Also save to a backup key for immediate access
-      const backupKey = `backup_${url}`;
-      await browser.storage.local.set({ [backupKey]: highlights });
+      console.log('Highlight saved successfully');
       
     } catch (error) {
       console.error('Error saving highlight:', error);
     }
-  }
-
-  /**
-   * Generate a CSS selector for an element
-   */
-  generateSelector(element) {
-    if (element.nodeType === Node.TEXT_NODE) {
-      element = element.parentNode;
-    }
-    
-    if (element.id) {
-      return `#${element.id}`;
-    }
-    
-    let selector = element.tagName.toLowerCase();
-    if (element.className) {
-      selector += '.' + element.className.split(' ').join('.');
-    }
-    
-    let parent = element.parentNode;
-    let index = 0;
-    let sibling = element.previousSibling;
-    
-    while (sibling) {
-      if (sibling.nodeType === Node.ELEMENT_NODE && sibling.tagName === element.tagName) {
-        index++;
-      }
-      sibling = sibling.previousSibling;
-    }
-    
-    if (index > 0) {
-      selector += `:nth-of-type(${index + 1})`;
-    }
-    
-    return selector;
-  }
-
-  /**
-   * Generate an XPath for an element
-   */
-  generateXPath(element) {
-    if (element.nodeType === Node.TEXT_NODE) {
-      element = element.parentNode;
-    }
-    
-    if (element.id) {
-      return `//*[@id="${element.id}"]`;
-    }
-    
-    let path = '';
-    while (element && element.nodeType === Node.ELEMENT_NODE) {
-      let index = 1;
-      let sibling = element.previousSibling;
-      
-      while (sibling) {
-        if (sibling.nodeType === Node.ELEMENT_NODE && sibling.tagName === element.tagName) {
-          index++;
-        }
-        sibling = sibling.previousSibling;
-      }
-      
-      const tagName = element.tagName.toLowerCase();
-      const pathIndex = index > 1 ? `[${index}]` : '';
-      path = `/${tagName}${pathIndex}${path}`;
-      
-      element = element.parentNode;
-    }
-    
-    return path;
   }
 
   /**
@@ -311,20 +225,6 @@ class WebHighlighter {
       // Try to get highlights from main storage
       let result = await browser.storage.local.get(url);
       let highlights = result[url] || [];
-      
-      // If no highlights found, try backup storage
-      if (highlights.length === 0) {
-        const backupKey = `backup_${url}`;
-        const backupResult = await browser.storage.local.get(backupKey);
-        if (backupResult[backupKey]) {
-          highlights = backupResult[backupKey];
-          console.log('Found highlights in backup storage:', highlights);
-          
-          // Restore from backup to main storage
-          await browser.storage.local.set({ [url]: highlights });
-          console.log('Restored highlights from backup to main storage');
-        }
-      }
       
       console.log('Final highlights to restore:', highlights);
       
@@ -375,160 +275,48 @@ class WebHighlighter {
    * Restore a single highlight
    */
   restoreHighlight(highlight) {
-    // Try to find the element using the stored selector or XPath
-    let targetElement = null;
-    
-    // First try CSS selector
-    if (highlight.selector) {
-      try {
-        targetElement = document.querySelector(highlight.selector);
-      } catch (e) {
-        console.warn('Invalid selector:', highlight.selector);
+    try {
+      // Simple approach: search for the text and highlight it
+      const textToFind = highlight.text;
+      if (!textToFind || textToFind.trim() === '') {
+        return;
       }
-    }
-    
-    // Fallback to XPath
-    if (!targetElement && highlight.xpath) {
-      try {
-        const xpathResult = document.evaluate(
-          highlight.xpath,
-          document,
-          null,
-          XPathResult.FIRST_ORDERED_NODE_TYPE,
-          null
-        );
-        targetElement = xpathResult.singleNodeValue;
-      } catch (e) {
-        console.warn('Invalid XPath:', highlight.xpath);
-      }
-    }
-    
-    if (targetElement) {
-      // Find and highlight the text within the element
-      this.findAndHighlightText(targetElement, highlight);
-    } else {
-      // Fallback: search the entire document for the text
-      this.searchAndHighlightText(highlight);
-    }
-  }
-
-  /**
-   * Find and highlight text within a specific element
-   */
-  findAndHighlightText(element, highlight) {
-    const textNodes = this.getTextNodes(element);
-    
-    for (let i = 0; i < textNodes.length; i++) {
-      const textNode = textNodes[i];
-      const text = textNode.textContent;
       
-      if (text.includes(highlight.text)) {
-        this.highlightTextNode(textNode, highlight);
-        break;
-      }
-    }
-  }
-
-  /**
-   * Search the entire document for text and highlight it
-   */
-  searchAndHighlightText(highlight) {
-    console.log('Searching entire document for text:', highlight.text);
-    
-    // First try to find exact text matches
-    const textNodes = this.getTextNodes(document.body);
-    let found = false;
-    
-    for (let i = 0; i < textNodes.length && !found; i++) {
-      const textNode = textNodes[i];
-      const text = textNode.textContent;
+      // Search the entire document for the text
+      const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      );
       
-      if (text.includes(highlight.text)) {
-        console.log('Found text in node:', textNode, 'Text:', text);
-        this.highlightTextNode(textNode, highlight);
-        found = true;
-        break;
-      }
-    }
-    
-    // If not found, try partial matches
-    if (!found) {
-      console.log('Trying partial text matches...');
-      for (let i = 0; i < textNodes.length && !found; i++) {
-        const textNode = textNodes[i];
+      let textNode;
+      while (textNode = walker.nextNode()) {
         const text = textNode.textContent;
-        
-        // Try to find partial matches (at least 50% of the text)
-        const minLength = Math.max(3, Math.floor(highlight.text.length * 0.5));
-        if (text.length >= minLength) {
-          // Check if any substring of the text contains a significant portion of the highlight
-          for (let j = 0; j <= text.length - minLength; j++) {
-            for (let k = minLength; k <= Math.min(text.length - j, highlight.text.length); k++) {
-              const substring = text.substring(j, j + k);
-              if (highlight.text.includes(substring) && substring.length >= minLength) {
-                console.log('Found partial match:', substring, 'in text:', text);
-                // Create a new highlight for the partial match
-                const partialHighlight = { ...highlight, text: substring };
-                this.highlightTextNode(textNode, partialHighlight);
-                found = true;
-                break;
-              }
-            }
-            if (found) break;
-          }
+        if (text.includes(textToFind)) {
+          // Found the text, create a highlight
+          const highlightSpan = document.createElement('span');
+          highlightSpan.className = this.highlightClass;
+          highlightSpan.id = highlight.id;
+          highlightSpan.style.backgroundColor = highlight.color;
+          highlightSpan.textContent = textToFind;
+          
+          // Replace the text with the highlight
+          const beforeText = text.substring(0, text.indexOf(textToFind));
+          const afterText = text.substring(text.indexOf(textToFind) + textToFind.length);
+          
+          const fragment = document.createDocumentFragment();
+          if (beforeText) fragment.appendChild(document.createTextNode(beforeText));
+          fragment.appendChild(highlightSpan);
+          if (afterText) fragment.appendChild(document.createTextNode(afterText));
+          
+          textNode.parentNode.replaceChild(fragment, textNode);
+          break; // Only highlight the first occurrence
         }
       }
+    } catch (error) {
+      console.error('Error restoring highlight:', error);
     }
-    
-    if (!found) {
-      console.warn('Could not find text to highlight:', highlight.text);
-    }
-  }
-
-  /**
-   * Get all text nodes within an element
-   */
-  getTextNodes(element) {
-    const textNodes = [];
-    const walker = document.createTreeWalker(
-      element,
-      NodeFilter.SHOW_TEXT,
-      null,
-      false
-    );
-    
-    let node;
-    while (node = walker.nextNode()) {
-      textNodes.push(node);
-    }
-    
-    return textNodes;
-  }
-
-  /**
-   * Highlight a specific text node
-   */
-  highlightTextNode(textNode, highlight) {
-    const text = textNode.textContent;
-    const regex = new RegExp(this.escapeRegex(highlight.text), 'g');
-    
-    if (regex.test(text)) {
-      // Create a new element to hold the highlighted text
-      const container = document.createElement('span');
-      container.innerHTML = text.replace(regex, (match) => {
-        return `<span class="${this.highlightClass}" id="${highlight.id}" style="background-color: ${highlight.color}; border-radius: 2px; padding: 1px 2px; margin: 0 1px;">${match}</span>`;
-      });
-      
-      // Replace the text node with the highlighted version
-      textNode.parentNode.replaceChild(container, textNode);
-    }
-  }
-
-  /**
-   * Escape special regex characters
-   */
-  escapeRegex(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   /**
@@ -536,20 +324,40 @@ class WebHighlighter {
    */
   clearAllHighlights() {
     try {
+      // Find all highlight elements
       const highlights = document.querySelectorAll(`.${this.highlightClass}`);
-      highlights.forEach(highlight => {
-        // Replace highlight with its text content
-        const textContent = highlight.textContent;
-        const textNode = document.createTextNode(textContent);
-        highlight.parentNode.replaceChild(textNode, highlight);
+      const count = highlights.length;
+      
+      console.log(`Found ${count} highlights to clear`);
+      
+      if (count === 0) {
+        return { success: true, count: 0, message: 'No highlights found' };
+      }
+      
+      // Clear each highlight
+      highlights.forEach((highlight, index) => {
+        try {
+          // Get the text content
+          const text = highlight.textContent;
+          
+          // Replace the highlight with a text node
+          const textNode = document.createTextNode(text);
+          highlight.parentNode.replaceChild(textNode, highlight);
+          
+          console.log(`Cleared highlight ${index + 1}/${count}`);
+        } catch (error) {
+          console.error(`Error clearing highlight ${index + 1}:`, error);
+        }
       });
       
       // Clear from storage
       this.clearHighlightsFromStorage();
       
-      return { success: true, count: highlights.length };
+      console.log(`Successfully cleared ${count} highlights`);
+      return { success: true, count: count, message: `Cleared ${count} highlights` };
+      
     } catch (error) {
-      console.error('Error clearing highlights:', error);
+      console.error('Error in clearAllHighlights:', error);
       return { success: false, message: error.message };
     }
   }
@@ -615,7 +423,7 @@ class WebHighlighter {
         if (element.textContent.includes(highlight.text)) {
           // Check if highlight is already applied
           if (!document.getElementById(highlight.id)) {
-            this.findAndHighlightText(element, highlight);
+            this.restoreHighlight(highlight);
           }
         }
       });
@@ -635,13 +443,6 @@ class WebHighlighter {
         // Check if our URL's highlights were changed
         if (changes[currentUrl]) {
           console.log('Storage changed for current URL, updating highlights...');
-          setTimeout(() => this.restoreHighlights(), 50);
-        }
-        
-        // Check if backup storage was changed
-        const backupKey = `backup_${currentUrl}`;
-        if (changes[backupKey]) {
-          console.log('Backup storage changed, updating highlights...');
           setTimeout(() => this.restoreHighlights(), 50);
         }
       }
@@ -665,19 +466,198 @@ class WebHighlighter {
       // Save back to storage
       await browser.storage.local.set({ [url]: updatedHighlights });
 
-      // Also clear from backup storage
-      const backupKey = `backup_${url}`;
-      await browser.storage.local.get(backupKey).then(backupResult => {
-        const backupHighlights = backupResult[backupKey] || [];
-        const updatedBackupHighlights = backupHighlights.filter(highlight => highlight.id !== highlightId);
-        browser.storage.local.set({ [backupKey]: updatedBackupHighlights });
-      });
-
       console.log(`Highlight with ID ${highlightId} deleted from storage for URL: ${url}`);
       return { success: true, count: initialCount - updatedHighlights.length };
     } catch (error) {
       console.error('Error deleting highlight:', error);
       return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * Set up click event listeners for highlights
+   */
+  setupHighlightClickListeners() {
+    // Handle clicks on the dustbin icon specifically
+    document.addEventListener('click', (e) => {
+      // Check if click is on the dustbin icon (pseudo-element)
+      const highlightElement = e.target.closest(`.${this.highlightClass}`);
+      if (highlightElement) {
+        // Calculate if click is within the dustbin icon area
+        const rect = highlightElement.getBoundingClientRect();
+        const clickX = e.clientX;
+        const clickY = e.clientY;
+        
+        // Dustbin icon is positioned at top-right of highlight
+        const dustbinLeft = rect.right - 8; // 8px from right edge
+        const dustbinTop = rect.top - 8;    // 8px from top edge
+        const dustbinSize = 20;             // 20x20px size
+        
+        // Check if click is within dustbin bounds
+        if (clickX >= dustbinLeft && clickX <= dustbinLeft + dustbinSize &&
+            clickY >= dustbinTop && clickY <= dustbinTop + dustbinSize) {
+          
+          const highlightId = highlightElement.id;
+          
+          // Show a simple confirmation and delete
+          if (confirm('Delete this highlight?')) {
+            this.deleteHighlight(highlightId).then(response => {
+              if (response.success) {
+                console.log(`Highlight with ID ${highlightId} deleted. ${response.count} highlights remaining.`);
+                // Remove the highlight element from the page
+                const highlightElement = document.getElementById(highlightId);
+                if (highlightElement) {
+                  highlightElement.parentNode.replaceChild(document.createTextNode(highlightElement.textContent), highlightElement);
+                }
+              } else {
+                console.error(`Failed to delete highlight with ID ${highlightId}:`, response.message);
+              }
+            });
+          }
+        }
+      }
+    });
+
+    // Handle right-click on highlights - show context menu
+    document.addEventListener('contextmenu', (e) => {
+      const highlightElement = e.target.closest(`.${this.highlightClass}`);
+      if (highlightElement) {
+        e.preventDefault(); // Prevent default context menu
+        const highlightId = highlightElement.id;
+        const highlightText = highlightElement.textContent;
+        const highlightColor = highlightElement.style.backgroundColor;
+
+        // Open a context menu for deletion
+        this.showContextMenu(e.clientX, e.clientY, highlightId, highlightText, highlightColor);
+      }
+    });
+  }
+
+  /**
+   * Show a context menu for highlighting
+   */
+  showContextMenu(x, y, highlightId, highlightText, highlightColor) {
+    // Remove any existing menus
+    const existingMenus = document.querySelectorAll('.highlight-context-menu');
+    existingMenus.forEach(menu => menu.remove());
+
+    const menu = document.createElement('div');
+    menu.className = 'highlight-context-menu';
+    
+    // Ensure menu stays within viewport
+    const menuWidth = 150;
+    const menuHeight = 50;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    let left = x;
+    let top = y;
+    
+    // Adjust horizontal position if menu would go off-screen
+    if (x + menuWidth > viewportWidth) {
+      left = x - menuWidth;
+    }
+    
+    // Adjust vertical position if menu would go off-screen
+    if (y + menuHeight > viewportHeight) {
+      top = y - menuHeight;
+    }
+    
+    menu.style.position = 'fixed';
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+    menu.style.backgroundColor = '#fff';
+    menu.style.border = '1px solid #ccc';
+    menu.style.borderRadius = '4px';
+    menu.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+    menu.style.zIndex = '9999';
+    menu.style.padding = '8px 0';
+    menu.style.fontSize = '14px';
+    menu.style.cursor = 'pointer';
+    menu.style.whiteSpace = 'nowrap';
+    menu.style.minWidth = '150px';
+
+    const deleteItem = document.createElement('div');
+    deleteItem.textContent = '🗑️ Delete Highlight';
+    deleteItem.style.color = '#dc3545';
+    deleteItem.style.padding = '8px 16px';
+    deleteItem.style.cursor = 'pointer';
+    deleteItem.style.transition = 'background-color 0.2s';
+
+    deleteItem.addEventListener('mouseenter', () => {
+      deleteItem.style.backgroundColor = '#f8f9fa';
+    });
+
+    deleteItem.addEventListener('mouseleave', () => {
+      deleteItem.style.backgroundColor = 'transparent';
+    });
+
+    deleteItem.addEventListener('click', () => {
+      this.deleteHighlight(highlightId).then(response => {
+        if (response.success) {
+          console.log(`Highlight with ID ${highlightId} deleted. ${response.count} highlights remaining.`);
+          // Remove the highlight element from the page
+          const highlightElement = document.getElementById(highlightId);
+          if (highlightElement) {
+            highlightElement.parentNode.replaceChild(document.createTextNode(highlightElement.textContent), highlightElement);
+          }
+        } else {
+          console.error(`Failed to delete highlight with ID ${highlightId}:`, response.message);
+        }
+      });
+      menu.remove();
+    });
+
+    menu.appendChild(deleteItem);
+    document.body.appendChild(menu);
+
+    // Add click outside handler
+    const clickOutsideHandler = (e) => {
+      if (!menu.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener('click', clickOutsideHandler);
+      }
+    };
+
+    // Delay adding the click outside handler to avoid immediate closure
+    setTimeout(() => {
+      document.addEventListener('click', clickOutsideHandler);
+    }, 100);
+  }
+
+  /**
+   * Refresh highlights from storage (useful when highlights are deleted externally)
+   */
+  async refreshHighlightsFromStorage() {
+    try {
+      const url = window.location.href;
+      const result = await browser.storage.local.get(url);
+      const highlights = result[url] || [];
+      
+      // Clear all current highlights from the page
+      const currentHighlights = document.querySelectorAll(`.${this.highlightClass}`);
+      currentHighlights.forEach(highlight => {
+        try {
+          const textContent = highlight.textContent;
+          const textNode = document.createTextNode(textContent);
+          highlight.parentNode.replaceChild(textNode, highlight);
+        } catch (error) {
+          console.error('Error clearing highlight:', error);
+        }
+      });
+      
+      // Restore highlights from storage (if any remain)
+      if (highlights.length > 0) {
+        console.log(`Restoring ${highlights.length} highlights after refresh`);
+        highlights.forEach(highlight => {
+          this.restoreHighlight(highlight);
+        });
+      } else {
+        console.log('No highlights to restore after refresh');
+      }
+      
+    } catch (error) {
+      console.error('Error refreshing highlights from storage:', error);
     }
   }
 }

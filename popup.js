@@ -207,15 +207,34 @@ class PopupManager {
         return;
       }
 
+      // First check if there are any highlights to clear
+      const result = await browser.storage.local.get(tab.url);
+      const highlights = result[tab.url] || [];
+      
+      if (highlights.length === 0) {
+        this.updateStatus('No highlights found on this page');
+        return;
+      }
+
+      // Confirm deletion
+      if (!confirm(`Are you sure you want to delete all ${highlights.length} highlights from this page?`)) {
+        return;
+      }
+
       // Send message to content script to clear highlights
       const response = await browser.tabs.sendMessage(tab.id, {
         action: 'clearAllHighlights'
       });
 
       if (response && response.success) {
-        this.updateStatus('All highlights cleared successfully');
+        this.updateStatus(`Successfully cleared ${response.count} highlights`);
+        
+        // Close popup after successful clear
+        setTimeout(() => {
+          window.close();
+        }, 1500);
       } else {
-        this.updateStatus('No highlights to clear or operation failed');
+        this.updateStatus('Failed to clear highlights: ' + (response?.message || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error clearing highlights:', error);
@@ -249,6 +268,29 @@ class PopupManager {
     } catch (error) {
       console.error('Error managing highlights:', error);
       this.updateStatus('Error: ' + error.message);
+    }
+  }
+
+  /**
+   * Refresh the highlights list (useful after clearing highlights)
+   */
+  async refreshHighlightsList() {
+    try {
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+      
+      if (tab.url && tab.url.startsWith('http')) {
+        // Get updated highlights for current page
+        const result = await browser.storage.local.get(tab.url);
+        const highlights = result[tab.url] || [];
+        
+        if (highlights.length === 0) {
+          this.updateStatus('No highlights on this page');
+        } else {
+          this.updateStatus(`${highlights.length} highlights on this page`);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing highlights list:', error);
     }
   }
 
@@ -369,17 +411,21 @@ class PopupManager {
    */
   async deleteAllHighlightsForWebsite(url, modal) {
     try {
+      // Get the highlights count for this URL
+      const result = await browser.storage.local.get(url);
+      const highlights = result[url] || [];
+      const highlightCount = highlights.length;
+      
       // Confirm deletion
-      if (!confirm(`Are you sure you want to delete ALL ${urlHighlights[url].length} highlights from ${this.getDomainFromUrl(url)}?`)) {
+      if (!confirm(`Are you sure you want to delete ALL ${highlightCount} highlights from ${this.getDomainFromUrl(url)}?`)) {
         return;
       }
 
       // Delete from storage
       await browser.storage.local.remove(url);
       
-      // Also delete from backup storage
-      const backupKey = `backup_${url}`;
-      await browser.storage.local.remove(backupKey);
+      // Check if this page is currently open in any tab and refresh highlights
+      await this.refreshPageHighlights(url);
       
       // Remove the website item from the UI
       const websiteItem = modal.querySelector(`[data-url="${url}"]`);
@@ -391,9 +437,8 @@ class PopupManager {
       const header = modal.querySelector('.modal-header h3');
       const currentWebsiteCount = parseInt(header.textContent.match(/\((\d+) websites/)[1]);
       const currentTotalCount = parseInt(header.textContent.match(/, (\d+) total/)[1]);
-      const deletedCount = urlHighlights[url].length;
       
-      header.textContent = `Manage Highlights (${currentWebsiteCount - 1} websites, ${currentTotalCount - deletedCount} total highlights)`;
+      header.textContent = `Manage Highlights (${currentWebsiteCount - 1} websites, ${currentTotalCount - highlightCount} total highlights)`;
       
       this.updateStatus(`Deleted all highlights from ${this.getDomainFromUrl(url)}`);
       
@@ -405,6 +450,30 @@ class PopupManager {
     } catch (error) {
       console.error('Error deleting website highlights:', error);
       this.updateStatus('Error: ' + error.message);
+    }
+  }
+
+  /**
+   * Refresh highlights on a specific page if it's currently open
+   */
+  async refreshPageHighlights(url) {
+    try {
+      // Find all tabs with this URL
+      const tabs = await browser.tabs.query({ url: url });
+      
+      // Send message to each tab to refresh highlights
+      for (const tab of tabs) {
+        try {
+          await browser.tabs.sendMessage(tab.id, {
+            action: 'refreshHighlights'
+          });
+          console.log(`Sent refresh message to tab ${tab.id} for ${url}`);
+        } catch (error) {
+          console.log(`Tab ${tab.id} doesn't have content script loaded or is not accessible`);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing page highlights:', error);
     }
   }
 
