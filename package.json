@@ -1,0 +1,31 @@
+{
+  "name": "universal-web-highlighter",
+  "version": "1.0.0",
+  "description": "A Firefox WebExtension for highlighting text on any webpage with persistent storage",
+  "main": "manifest.json",
+  "scripts": {
+    "build": "echo 'Building extension...' && zip -r web-highlighter.xpi . -x '*.git*' '*.DS_Store' 'node_modules/*' '*.md' 'package.json' 'package-lock.json'",
+    "dev": "echo 'Extension ready for development. Load manifest.json in Firefox about:debugging'",
+    "clean": "rm -f web-highlighter.xpi",
+    "test": "echo 'No tests specified yet'"
+  },
+  "keywords": [
+    "firefox",
+    "webextension",
+    "highlight",
+    "text",
+    "persistent",
+    "storage"
+  ],
+  "author": "Web Highlighter Team",
+  "license": "MIT",
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/universal-web-highlighter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/universal-web-highlighter/issues"
+  },
+  "homepage": "https://github.com/yourusername/universal-web-highlighter#readme"
+} 

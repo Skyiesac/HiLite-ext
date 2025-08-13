@@ -1,0 +1,36 @@
+{
+  "manifest_version": 2,
+  "name": "HiLite",
+  "version": "1.0.0",
+  "description": "Highlight text on any webpage with custom colors and persist highlights across sessions",
+  
+  "permissions": [
+    "activeTab",
+    "storage",
+    "contextMenus",
+    "<all_urls>"
+  ],
+  
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_end"
+    }
+  ],
+  
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_title": "HiLite - Web Highlighter"
+  },
+  
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png"
+  },
+  
+  "background": {
+    "scripts": ["background.js"]
+  }
+} 

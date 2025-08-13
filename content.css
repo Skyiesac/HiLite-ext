@@ -1,0 +1,149 @@
+.web-highlighter-highlight {
+  /* Base highlight styling */
+  position: relative;
+  display: inline;
+  border-radius: 2px;
+  padding: 1px 2px;
+  margin: 0 1px;
+  transition: all 0.2s ease;
+  
+  /* Ensure highlights are visible */
+  z-index: 1000;
+  
+  /* Prevent text selection issues */
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
+/* Hover effects for better UX */
+.web-highlighter-highlight:hover {
+  transform: scale(1.02);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Focus styles for accessibility */
+.web-highlighter-highlight:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 1px;
+}
+
+/* Ensure highlights work well with different text directions */
+.web-highlighter-highlight[dir="rtl"] {
+  direction: rtl;
+}
+
+/* Handle highlights in different contexts */
+.web-highlighter-highlight p,
+.web-highlighter-highlight div,
+.web-highlighter-highlight span {
+  display: inline;
+}
+
+/* Ensure highlights don't break layout */
+.web-highlighter-highlight br {
+  display: none;
+}
+
+/* Handle highlights in form elements */
+.web-highlighter-highlight input,
+.web-highlighter-highlight textarea {
+  background-color: inherit !important;
+}
+
+/* Ensure highlights work in tables */
+.web-highlighter-highlight td,
+.web-highlighter-highlight th {
+  position: relative;
+}
+
+/* Handle highlights in lists */
+.web-highlighter-highlight li {
+  display: list-item;
+}
+
+/* Ensure highlights work in code blocks */
+.web-highlighter-highlight pre,
+.web-highlighter-highlight code {
+  background-color: inherit !important;
+  color: inherit !important;
+}
+
+/* Handle highlights in headings */
+.web-highlighter-highlight h1,
+.web-highlighter-highlight h2,
+.web-highlighter-highlight h3,
+.web-highlighter-highlight h4,
+.web-highlighter-highlight h5,
+.web-highlighter-highlight h6 {
+  display: inline;
+}
+
+/* Ensure highlights work in blockquotes */
+.web-highlighter-highlight blockquote {
+  display: block;
+}
+
+/* Handle highlights in links */
+.web-highlighter-highlight a {
+  text-decoration: inherit;
+  color: inherit;
+}
+
+/* Ensure highlights work in buttons */
+.web-highlighter-highlight button {
+  background-color: inherit !important;
+  color: inherit !important;
+}
+
+/* Handle highlights in SVG text elements */
+.web-highlighter-highlight text {
+  fill: inherit !important;
+}
+
+/* Ensure highlights work in canvas contexts */
+.web-highlighter-highlight canvas {
+  background-color: inherit !important;
+}
+
+/* Handle highlights in iframes (if accessible) */
+.web-highlighter-highlight iframe {
+  background-color: inherit !important;
+}
+
+/* Ensure highlights work in print */
+@media print {
+  .web-highlighter-highlight {
+    -webkit-print-color-adjust: exact;
+    color-adjust: exact;
+    background-color: inherit !important;
+  }
+}
+
+/* Handle highlights in dark mode */
+@media (prefers-color-scheme: dark) {
+  .web-highlighter-highlight {
+    /* Ensure highlights remain visible in dark mode */
+    filter: brightness(1.1) contrast(1.1);
+  }
+}
+
+/* Handle highlights in high contrast mode */
+@media (prefers-contrast: high) {
+  .web-highlighter-highlight {
+    /* Ensure highlights meet accessibility standards */
+    border: 1px solid currentColor;
+  }
+}
+
+/* Handle highlights in reduced motion mode */
+@media (prefers-reduced-motion: reduce) {
+  .web-highlighter-highlight {
+    transition: none;
+  }
+  
+  .web-highlighter-highlight:hover {
+    transform: none;
+  }
+} 

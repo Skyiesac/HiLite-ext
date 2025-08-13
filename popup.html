@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HiLite</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>HiLite</h1>
+      <p>Select text and choose a color to highlight</p>
+    </header>
+    
+    <div class="color-section">
+      <label for="colorPicker">Custom Color:</label>
+      <div class="color-picker-container">
+        <input type="color" id="colorPicker" value="#ffff00">
+        <span class="color-preview" id="colorPreview"></span>
+      </div>
+      
+      <div class="color-presets">
+        <label>Quick Colors:</label>
+        <div class="color-swatches">
+          <button class="color-swatch" data-color="#ffff00" title="Yellow" style="background-color: #ffff00;"></button>
+          <button class="color-swatch" data-color="#ff6b6b" title="Red" style="background-color: #ff6b6b;"></button>
+          <button class="color-swatch" data-color="#4ecdc4" title="Teal" style="background-color: #4ecdc4;"></button>
+          <button class="color-swatch" data-color="#45b7d1" title="Blue" style="background-color: #45b7d1;"></button>
+          <button class="color-swatch" data-color="#96ceb4" title="Green" style="background-color: #96ceb4;"></button>
+          <button class="color-swatch" data-color="#feca57" title="Orange" style="background-color: #feca57;"></button>
+          <button class="color-swatch" data-color="#ff9ff3" title="Pink" style="background-color: #ff9ff3;"></button>
+          <button class="color-swatch" data-color="#a8e6cf" title="Mint" style="background-color: #a8e6cf;"></button>
+          <button class="color-swatch" data-color="#dda0dd" title="Lavender" style="background-color: #dda0dd;"></button>
+          <button class="color-swatch" data-color="#f4a460" title="Sandy Brown" style="background-color: #f4a460;"></button>
+          <button class="color-swatch" data-color="#98fb98" title="Pale Green" style="background-color: #98fb98;"></button>
+          <button class="color-swatch" data-color="#87ceeb" title="Sky Blue" style="background-color: #87ceeb;"></button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="action-section">
+      <button id="highlightBtn" class="btn btn-primary">
+        <span class="icon">✨</span>
+        Highlight Selection
+      </button>
+      <button id="clearBtn" class="btn btn-secondary">
+        <span class="icon">🗑️</span>
+        Clear All Highlights
+      </button>
+    </div>
+    
+    <div class="info-section">
+      <div class="status" id="status">
+        Ready to highlight text
+      </div>
+      <div class="shortcuts">
+        <p><strong>Shortcut:</strong> Select text → Right-click → "Highlight with HiLite"</p>
+      </div>
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html> 
