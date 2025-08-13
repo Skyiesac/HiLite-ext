@@ -99,6 +99,9 @@ class WebHighlighter {
         case 'getHighlights':
           sendResponse(this.getCurrentHighlights());
           break;
+        case 'deleteHighlight':
+          this.deleteHighlight(message.highlightId).then(sendResponse);
+          break;
         case 'debugStorage':
           this.debugStorage().then(sendResponse);
           break;
@@ -643,6 +646,39 @@ class WebHighlighter {
         }
       }
     });
+  }
+
+  /**
+   * Delete a specific highlight by its ID
+   */
+  async deleteHighlight(highlightId) {
+    try {
+      const url = window.location.href;
+      const result = await browser.storage.local.get(url);
+      const highlights = result[url] || [];
+
+      const initialCount = highlights.length;
+
+      // Filter out the highlight to be deleted
+      const updatedHighlights = highlights.filter(highlight => highlight.id !== highlightId);
+
+      // Save back to storage
+      await browser.storage.local.set({ [url]: updatedHighlights });
+
+      // Also clear from backup storage
+      const backupKey = `backup_${url}`;
+      await browser.storage.local.get(backupKey).then(backupResult => {
+        const backupHighlights = backupResult[backupKey] || [];
+        const updatedBackupHighlights = backupHighlights.filter(highlight => highlight.id !== highlightId);
+        browser.storage.local.set({ [backupKey]: updatedBackupHighlights });
+      });
+
+      console.log(`Highlight with ID ${highlightId} deleted from storage for URL: ${url}`);
+      return { success: true, count: initialCount - updatedHighlights.length };
+    } catch (error) {
+      console.error('Error deleting highlight:', error);
+      return { success: false, message: error.message };
+    }
   }
 }
 
